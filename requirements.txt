@@ -1,2 +1,3 @@
+gunicorn>=20.0.0
 Flask
 gradio-client
