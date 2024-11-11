@@ -101,16 +101,18 @@ def index():
 @app.route('/get_prediction_result', methods=['GET'])
 def get_prediction_result():
     try:
-        # Wait for the result (with a timeout to avoid indefinite hanging)
         result = result_queue.get(timeout=120)  # Wait for up to 120 seconds
-        if isinstance(result, tuple):  # If the result is a tuple, we have image URLs
+        if isinstance(result, tuple):
             background_image_url, garment_image_url = result
             return jsonify({'background_image_url': background_image_url, 'garment_image_url': garment_image_url})
-        else:  # If the result is a string, it is an error message
+        else:
+            app.logger.error(f"Background task error: {result}")
             return jsonify({'error': result}), 500
     except queue.Empty:
+        app.logger.error("Prediction timed out.")
         return jsonify({'error': 'Prediction timed out'}), 500
     except Exception as e:
+        app.logger.error(f"An error occurred: {str(e)}")
         return jsonify({'error': f"An error occurred: {str(e)}"}), 500
 
 @app.route('/favicon.ico')
