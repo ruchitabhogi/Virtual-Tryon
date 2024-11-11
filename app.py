@@ -1,12 +1,15 @@
 import os
 import shutil
-import threading
 import queue
+import threading
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from gradio_client import Client, handle_file
 
 app = Flask(__name__)
 client = Client("yisol/IDM-VTON")
+
+# Queue to hold results from background task
+result_queue = queue.Queue()
 
 class VirtualTryOn:
     def try_on(self, background_image_path, garment_image_path):
@@ -14,7 +17,7 @@ class VirtualTryOn:
             raise FileNotFoundError(f"Background image not found at {background_image_path}.")
         if not os.path.exists(garment_image_path):
             raise FileNotFoundError(f"Garment image not found at {garment_image_path}.")
-        
+
         result = client.predict(
             dict={
                 "background": handle_file(background_image_path),
@@ -44,24 +47,19 @@ class VirtualTryOn:
 
         return f"/static/output_background.jpg", f"/static/output_garment.jpg"
 
-
-# Global queue to hold the result for each prediction
-result_queue = queue.Queue()
-
-# Function to run the prediction asynchronously
-def run_prediction_async(background_image_path, garment_image_path):
+def background_task(background_image_path, garment_image_path):
     try:
         virtual_try_on = VirtualTryOn()
-        background_image_url, garment_image_url = virtual_try_on.try_on(background_image_path, garment_image_path)
-        result_queue.put((background_image_url, garment_image_url))  # Push result to queue
+        background_image_url, garment_image_url = virtual_try_on.try_on(
+            background_image_path, garment_image_path
+        )
+        result_queue.put((background_image_url, garment_image_url))  # Put result in queue
     except Exception as e:
-        result_queue.put(str(e))  # Push error message to queue
-
+        result_queue.put(str(e))  # Put error message in queue
 
 @app.route('/')
 def home():
     return redirect(url_for('login'))
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -72,8 +70,8 @@ def login():
             return redirect(url_for('index'))
         else:
             return render_template('login.html', error="Invalid credentials, please try again.")
-    return render_template('login.html')
 
+    return render_template('login.html')
 
 @app.route('/index', methods=['GET', 'POST'])
 def index():
@@ -90,17 +88,15 @@ def index():
             background_image.save(background_image_path)
             garment_image.save(garment_image_path)
 
-            # Start the prediction in a separate thread
-            prediction_thread = threading.Thread(target=run_prediction_async, args=(background_image_path, garment_image_path))
-            prediction_thread.start()
+            # Start the background task to process the images
+            threading.Thread(target=background_task, args=(background_image_path, garment_image_path)).start()
 
-            # Return the loading page while prediction runs
+            # Show loading page while waiting for results
             return render_template('loading.html')
 
     return render_template('index.html', 
                            background_image_url=background_image_url, 
                            garment_image_url=garment_image_url)
-
 
 @app.route('/get_prediction_result', methods=['GET'])
 def get_prediction_result():
@@ -117,12 +113,9 @@ def get_prediction_result():
     except Exception as e:
         return jsonify({'error': f"An error occurred: {str(e)}"}), 500
 
-
-# Favicon handler
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=10000)
