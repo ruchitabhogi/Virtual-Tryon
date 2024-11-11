@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Try-On</title>
+</head>
+<body>
+    <h1>Virtual Try-On</h1>
+    <form action="/index" method="POST" enctype="multipart/form-data">
+        <label for="background_image">Background Image:</label>
+        <input type="file" name="background_image" required><br><br>
+        
+        <label for="garment_image">Garment Image:</label>
+        <input type="file" name="garment_image" required><br><br>
+
+        <input type="submit" value="Upload Images">
+    </form>
+
+    {% if background_image_url and garment_image_url %}
+        <h2>Prediction Results:</h2>
+        <img src="{{ background_image_url }}" alt="Background Image" style="max-width: 100%;"><br>
+        <img src="{{ garment_image_url }}" alt="Garment Image" style="max-width: 100%;">
+    {% endif %}
+</body>
+</html>
